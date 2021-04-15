@@ -1,10 +1,12 @@
 // BennyMakes Express Server
 
 const express = require('express');
+const cors = require('cors');
 const mongo = require('mongodb');
 const MongoClient = require('mongodb').MongoClient;
 const api = express();
 const port = 3000;
+
 
 const settings = {
   version: "1.0.0",
@@ -68,7 +70,7 @@ app.checkParams = function(data, requiredParams){
         if(data[requiredParams[i].title]!=null&&data[requiredParams[i].title]!=""){
           if(requiredParams[i].hasOwnProperty('type')){
             if(typeof data[requiredParams[i].title]!==requiredParams[i].type){
-              return [false, "Incorrect property data type. ("+requiredParams[i].title+")"];
+              return [false, "Incorrect property data type. ("+requiredParams[i].title+")(Required "+requiredParams[i].type+" recieved "+typeof data[requiredParams[i].title]+")"];
             }
           }
         }
@@ -84,9 +86,9 @@ app.checkParams = function(data, requiredParams){
 
 
 // App Settings
-api.use(express.json()) // for parsing application/json
-api.use(express.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
-
+api.use(express.json()); // for parsing application/json
+api.use(express.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
+api.use(cors()); //Allows cors on the entire application
 
 
 // Database Settings
@@ -128,7 +130,7 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
     });
 
     api.get('/version', (req,res) => {
-      res.send(getVersion());
+      res.send('{"version":"'+app.getVersion()+'"}');
     });
 
 
@@ -149,9 +151,28 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
         })
     });
 
+
+
     // Get All Articles
     api.get('/articles', (req, res) => {
-      db.client.collection('articles').find().toArray()
+      db.client.collection('articles').aggregate([
+        {
+          "$lookup":{
+            from: 'tags',
+            localField: 'tags',
+            foreignField: "_id",
+            as: 'tags'
+          }
+        },
+        {
+          "$lookup":{
+            from: 'users',
+            localField: 'authors',
+            foreignField: "_id",
+            as: 'authors'
+          }
+        }
+      ]).toArray()
         .then(results => {
           res.send([true,results]);
         })
@@ -160,17 +181,30 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
         })
     });
 
+
+
     // Create New Article
     api.post('/article', (req, res) => {
       app.log(req.body);
+      let data = req.body;
       let params = [
         { title: 'title', required: true, type: 'string' },
-        { title: 'creator', required: true, type: 'string'},
         { title: 'content', required: true, type: 'string'},
         { title: 'published', required: true, type: 'boolean'}
       ];
 
-      let result = app.checkParams(req.body, params);
+      for(var a = 0; a < data.authors.length; a++){
+        data.authors[a] = new mongo.ObjectId(data.authors[a]);
+      }
+
+      for(var a = 0; a < data.tags.length; a++){
+        data.tags[a] = new mongo.ObjectId(data.tags[a]);
+      }
+
+      app.log(data);
+
+      let result = app.checkParams(data, params);
+
       if(result[0]!=false){
 
         // Assign timestamps to the article
@@ -191,6 +225,8 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
         res.send(result);
       }
     });
+
+
 
     // Delete an article by id
     api.get('/article/:id', (req, res) => {
@@ -216,6 +252,8 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
         })
     });
 
+
+
     // Get All Tags
     api.get('/tags', (req, res) => {
       db.client.collection('tags').find().toArray()
@@ -226,6 +264,8 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
           res.send([false,error]);
         })
     });
+
+
 
     // Create New Tag
     api.post('/tag', (req, res) => {
@@ -256,6 +296,8 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
       }
     });
 
+
+
     // Delete an Tag by id
     api.get('/tag/:id/removebyid', (req, res) => {
       db.client.collection('tags').deleteOne({_id: new mongo.ObjectId(req.params.id)})
@@ -266,6 +308,8 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
           res.send([false,error]);
         })
     });
+
+
 
     // Delete an Tag by title
     api.get('/tag/:title/remove', (req, res) => {
