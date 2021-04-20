@@ -182,6 +182,67 @@ const connectionString = "mongodb+srv://"+dbUser+":"+dbPass+"@clusterzero.pkoch.
     });
 
 
+    // Get All Articles by Tag
+    api.get('/articles-by-tag/:tagid', (req, res) => {
+      db.client.collection('articles').aggregate([
+        {
+          $match: {tags: new mongo.ObjectId(req.params.tagid)}
+        },
+        {
+          "$lookup":{
+            from: 'tags',
+            localField: 'tags',
+            foreignField: "_id",
+            as: 'tags'
+          }
+        },
+        {
+          "$lookup":{
+            from: 'users',
+            localField: 'authors',
+            foreignField: "_id",
+            as: 'authors'
+          }
+        }
+      ]).toArray()
+        .then(results => {
+          res.send([true,results]);
+        })
+        .catch(error => {
+          res.send([false,error]);
+        })
+    });
+
+    // Get All Articles by Author
+    api.get('/articles-by-author/:authorId', (req, res) => {
+      db.client.collection('articles').aggregate([
+        {
+          $match: {authors: new mongo.ObjectId(req.params.authorId)}
+        },
+        {
+          "$lookup":{
+            from: 'tags',
+            localField: 'tags',
+            foreignField: "_id",
+            as: 'tags'
+          }
+        },
+        {
+          "$lookup":{
+            from: 'users',
+            localField: 'authors',
+            foreignField: "_id",
+            as: 'authors'
+          }
+        }
+      ]).toArray()
+        .then(results => {
+          res.send([true,results]);
+        })
+        .catch(error => {
+          res.send([false,error]);
+        })
+    });
 
     // Create New Article
     api.post('/article', (req, res) => {
